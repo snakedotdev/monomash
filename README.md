@@ -19,6 +19,9 @@ Can also be `source`d
 git checkout main
 git merge --no-ff -s recursive -X subtree -X no-renames some-branch
 ```
-
+# Full history
+```
+git log --follow
+```
 
 
