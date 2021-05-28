@@ -15,10 +15,12 @@ pass <repository url> <remote name> <destination directory> on stdin
 Can also be `source`d
 
 # Merging branches in the monorepo afterwards
+Use the `teleport.sh` script, like:
+
 ```
-git checkout main
-git merge --no-ff -s recursive -X subtree -X no-renames some-branch
+teleport.sh ~/pete/oldrepo myfeature ~/pete/monorepo main
 ```
+
 # Full history
 ```
 git log --follow
