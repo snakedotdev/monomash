@@ -61,6 +61,27 @@ function mash {
     echo "Done mashing $b of $d"
 }
 
+## make sure we have a root commit
+function plant-branch {
+    local name branch
+
+    name=$1
+    branch=$2
+
+	if git rev-parse -q --verify "$branch^{commit}"; then
+		# Branch already exists, just check it out (and clean up the working dir)
+		git checkout -q "$branch"
+		git checkout -q --
+		git clean -f -d
+	else
+		# Create a fresh branch with an empty root commit"
+		git checkout -q --orphan "$branch"
+		# The ignore unmatch is necessary when this was a fresh repo
+		git rm -rfq --ignore-unmatch .
+		git commit -q --allow-empty -m "Root commit for monorepo's $branch branch"
+	fi
+}
+
 ##### FUNCTIONS
 
 # Silent pushd/popd
@@ -110,12 +131,19 @@ add-upstream-branch () {
     fi
 }
 
-# Create a monorepository in a directory "core". Read repositories from STDIN:
-# one line per repository, with two space separated values:
-#
-# 1. The (git cloneable) location of the repository
-# 2. The name of the target directory in the core repository
-function create-mono {
+# add a tag to an upstream remote
+# XXX only origin
+add-upstream-tag () {
+    if ! git rev-parse -q --verify "$1"; then
+        git tag $1 $2
+        git push origin $1
+    else
+        echo "Upstream tag $1 already exists"
+        return 1
+    fi
+}
+
+init-mono () {
 	if [[ -d "$MONOREPO_NAME" ]]; then
 		echo "Target repository directory $MONOREPO_NAME already exists." >&2
 		return 1
@@ -123,60 +151,24 @@ function create-mono {
 	mkdir "$MONOREPO_NAME"
 	pushd "$MONOREPO_NAME"
 	git init
-	
-	# This directory will contain all final tag refs (namespaced)
-	mkdir -p .git/refs/namespaced-tags
-
-	read_repositories | while read repo name folder; do
-
-		if [[ -z "$name" ]]; then
-			echo "pass REPOSITORY NAME pairs on stdin" >&2
-			return 1
-		elif [[ "$name" = */* ]]; then
-			echo "Forward slash '/' not supported in repo names: $name" >&2
-			return 1
-		fi
-
-                if [[ -z "$folder" ]]; then
-			folder="$name"
-                fi
-
-		if [[ -z $(git remote | grep $name) ]]; then
-		    echo "Merging in $repo.." >&2
-    		git remote add "$name" "$repo"
-		fi
-		echo "Fetching $name.." >&2 
-		git fetch -q "$name"
-
-		# Now we've got all tags in .git/refs/tags: put them away for a sec
-		if [[ -n "$(ls .git/refs/tags)" ]]; then
-			mv .git/refs/tags ".git/refs/namespaced-tags/$name"
-		fi
-
-		# Merge every branch from the sub repo into the mono repo, into a
-		# branch of the same name (create one if it doesn't exist).
-		remote-branches "$name" | while read branch; do
-			if git rev-parse -q --verify "$branch^{commit}"; then
-				# Branch already exists, just check it out (and clean up the working dir)
-				git checkout -q "$branch"
-				git checkout -q --
-				git clean -f -d
-			else
-				# Create a fresh branch with an empty root commit"
-				git checkout -q --orphan "$branch"
-				# The ignore unmatch is necessary when this was a fresh repo
-				git rm -rfq --ignore-unmatch .
-				git commit -q --allow-empty -m "Root commit for monorepo's $branch branch"
-			fi
-            mash $branch $name
-		done
-	done
-
-	# Restore all namespaced tags
-	rm -rf .git/refs/tags
-	mv .git/refs/namespaced-tags .git/refs/tags
+	popd
 }
+	
+ingest-repo() {
+    local repo name
+    repo=$1
+    name=$2
+     
+    if [[ "$name" = */* ]]; then
+		echo "Forward slash '/' not supported in repo names: $name" >&2
+		return 1
+	fi
 
-if [[ "$is_script" == "true" ]]; then
-	create-mono "${1:-}"
-fi
+	if [[ -z $(git remote | grep $name) ]]; then
+	    echo "Merging in $repo.." >&2
+		git remote add "$name" "$repo"
+	fi
+	echo "Fetching $name.." >&2 
+	git fetch -q "$name"
+}
+ 
