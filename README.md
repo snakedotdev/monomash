@@ -14,7 +14,7 @@ export DEBUGSH=1
 Use the `teleport.sh` script, like:
 
 ```
-teleport.sh ~/pete/oldrepo myfeature ~/pete/monorepo main
+gteleport.sh ~/pete/oldrepo myfeature develop ~/pete/monorepo main ~/pete/monorepo/oldrepo
 ```
 
 # Full history
